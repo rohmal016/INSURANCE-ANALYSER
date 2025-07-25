@@ -26,7 +26,7 @@ export class AppController {
 
 
 
-  @Post('analyze-acord25')
+  @Post('analyze-coi')
   @UseInterceptors(
     FileInterceptor('file', {
       fileFilter: (req, file, cb) => {
@@ -38,7 +38,7 @@ export class AppController {
       },
     }),
   )
-  async analyzeACORD25(@UploadedFile() file: Express.Multer.File) {
+  async analyzeCOI(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }

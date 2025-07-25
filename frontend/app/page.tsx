@@ -33,7 +33,7 @@ export default function Home() {
     formData.append("file", file);
     
     try {
-      const res = await fetch("http://localhost:8000/api/analyze-acord25", {
+      const res = await fetch("http://localhost:8000/api/analyze-coi", {
         method: "POST",
         body: formData,
       });
