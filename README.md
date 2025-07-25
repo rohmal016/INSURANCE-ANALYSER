@@ -90,7 +90,7 @@ Frontend runs on: `http://localhost:3000`
 
 ## 📊 API Endpoints
 
-- `POST /api/analyze-acord25` - Analyze ACORD 25 certificates
+- `POST /api/analyze-coi` - Analyze ACORD 25 certificates
 - `GET /api` - Health check
 
 ## 🔍 Data Extraction
