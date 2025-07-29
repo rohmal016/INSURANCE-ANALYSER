@@ -24,12 +24,17 @@ export interface Response<T> {
 }
 
 @Injectable()
-export class ErrorHandlerInterceptor<T> implements NestInterceptor<T, Response<T>> {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
+export class ErrorHandlerInterceptor<T>
+  implements NestInterceptor<T, Response<T>>
+{
+  intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Observable<Response<T>> {
     const startTime = Date.now();
-    
+
     return next.handle().pipe(
-      map(data => ({
+      map((data) => ({
         success: true,
         data,
         metadata: {
@@ -37,12 +42,12 @@ export class ErrorHandlerInterceptor<T> implements NestInterceptor<T, Response<T
           processingTime: Date.now() - startTime,
         },
       })),
-      catchError(error => {
+      catchError((error) => {
         const processingTime = Date.now() - startTime;
-        
+
         // Handle different types of errors
         let errorResponse: any;
-        
+
         if (error instanceof HttpException) {
           errorResponse = {
             code: this.getErrorCode(error.getStatus()),
@@ -68,32 +73,51 @@ export class ErrorHandlerInterceptor<T> implements NestInterceptor<T, Response<T
             details: { originalError: error.message },
           };
         }
-        
-        return throwError(() => new HttpException({
-          success: false,
-          error: errorResponse,
-          metadata: {
-            timestamp: new Date(),
-            processingTime,
-          },
-        }, error instanceof HttpException ? error.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR));
+
+        return throwError(
+          () =>
+            new HttpException(
+              {
+                success: false,
+                error: errorResponse,
+                metadata: {
+                  timestamp: new Date(),
+                  processingTime,
+                },
+              },
+              error instanceof HttpException
+                ? error.getStatus()
+                : HttpStatus.INTERNAL_SERVER_ERROR,
+            ),
+        );
       }),
     );
   }
-  
+
   private getErrorCode(status: number): string {
     switch (status) {
-      case 400: return 'BAD_REQUEST';
-      case 401: return 'UNAUTHORIZED';
-      case 403: return 'FORBIDDEN';
-      case 404: return 'NOT_FOUND';
-      case 413: return 'PAYLOAD_TOO_LARGE';
-      case 422: return 'UNPROCESSABLE_ENTITY';
-      case 429: return 'TOO_MANY_REQUESTS';
-      case 500: return 'INTERNAL_SERVER_ERROR';
-      case 502: return 'BAD_GATEWAY';
-      case 503: return 'SERVICE_UNAVAILABLE';
-      default: return 'UNKNOWN_ERROR';
+      case 400:
+        return 'BAD_REQUEST';
+      case 401:
+        return 'UNAUTHORIZED';
+      case 403:
+        return 'FORBIDDEN';
+      case 404:
+        return 'NOT_FOUND';
+      case 413:
+        return 'PAYLOAD_TOO_LARGE';
+      case 422:
+        return 'UNPROCESSABLE_ENTITY';
+      case 429:
+        return 'TOO_MANY_REQUESTS';
+      case 500:
+        return 'INTERNAL_SERVER_ERROR';
+      case 502:
+        return 'BAD_GATEWAY';
+      case 503:
+        return 'SERVICE_UNAVAILABLE';
+      default:
+        return 'UNKNOWN_ERROR';
     }
   }
-} 
+}

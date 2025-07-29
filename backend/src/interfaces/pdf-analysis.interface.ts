@@ -4,52 +4,64 @@ export interface Insurer {
   naic_code: string;
 }
 
-export interface PdfAnalysisResult {
-  certificate_information: {
-    certificate_holder: string;
-    certificate_number: string;
-    revision_number: string | null;
-    issue_date: string;
-  };
-  insurers: Insurer[];
-  policies: Policy[];
-  producer_information: {
-    primary_details: {
-      full_name: string | null;
-      email_address: string | null;
-      doing_business_as: string | null;
-    };
-    contact_information: {
-      phone_number: string;
-      fax_number: string | null;
-      license_number: string | null;
-    };
-    address_details: {
-      address_line_1: string;
-      address_line_2: string | null;
-      address_line_3: string | null;
-      city: string;
-      state: string;
-      zip_code: string;
-      country: string;
-    };
-  };
+export interface CertificateInformation {
+  certificate_holder: string | null;
+  certificate_number: string | null;
+  revision_number: string | null;
+  issue_date: string | null;
 }
 
-export interface Policy {
-  policy_information: {
-    policy_type: string;
-    policy_number: string;
-    effective_date: string;
-    expiry_date: string;
-  };
-  insurer_letter: string;
-  coverages: Coverage[];
+export interface PolicyInformation {
+  policy_type: string | null;
+  policy_number: string | null;
+  effective_date: string | null;
+  expiry_date: string | null;
 }
 
 export interface Coverage {
-  limit_type: string;
-  limit_value: number;
+  limit_type: string | null;
+  limit_value: number | null;
+}
+
+export interface Policy {
+  policy_information: PolicyInformation;
+  insurer_letter: string | null;
+  coverages: Coverage[];
+}
+
+export interface PrimaryDetails {
+  full_name: string | null;
+  email_address: string | null;
+  doing_business_as: string | null;
+}
+
+export interface ContactInformation {
+  phone_number: string | null;
+  fax_number: string | null;
+  license_number: string | null;
+}
+
+export interface AddressDetails {
+  address_line_1: string | null;
+  address_line_2: string | null;
+  address_line_3: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  country: string | null;
+}
+
+export interface ProducerInformation {
+  primary_details: PrimaryDetails;
+  contact_information: ContactInformation;
+  address_details: AddressDetails;
+}
+
+export interface PdfAnalysisResult {
+  certificate_information: CertificateInformation;
+  insurers: Insurer[];
+  policies: Policy[];
+  producer_information: ProducerInformation;
 }
 
 export interface PdfMetadata {
@@ -64,4 +76,4 @@ export interface AnalysisResponse {
   data: PdfAnalysisResult;
   metadata: PdfMetadata;
   timestamp: Date;
-} 
+}

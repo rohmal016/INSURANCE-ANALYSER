@@ -1,134 +1,51 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import {
-  GoogleGenAI,
-} from '@google/genai';
+import { Injectable } from '@nestjs/common';
+import { GoogleGenAI } from '@google/genai';
+import { createUserContent, createPartFromUri } from '@google/genai';
 import { PdfAnalysisResult } from './interfaces/pdf-analysis.interface';
-
 import * as fs from 'fs';
+import { PDFDocument } from 'pdf-lib';
 
 @Injectable()
-export class GeminiService {
-  // Define model names as constants to prevent typos
+export class Gemini2Service {
+  // Define model names as constants
   private readonly PRIMARY_MODEL = 'gemini-2.5-flash-lite';
   private readonly FALLBACK_MODEL = 'gemini-2.5-flash';
 
   private ai: GoogleGenAI;
-  private modelName: string;
+  private currentModel: string;
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('GEMINI_API_KEY is required');
+      throw new Error('GEMINI_API_KEY environment variable is required');
     }
 
     this.ai = new GoogleGenAI({ apiKey });
-    this.modelName = this.PRIMARY_MODEL;
+    this.currentModel = this.PRIMARY_MODEL;
   }
 
   /**
    * Switches to the fallback model.
    */
-  private switchToFallbackModel() {
-    this.modelName = this.FALLBACK_MODEL;
+  private switchToFallbackModel(): void {
+    this.currentModel = this.FALLBACK_MODEL;
   }
 
-  /**
-   * Process PDF for AI analysis - read full file and convert to base64
-   * The AI service will handle page limits internally
-   */
-  async compressPdfForAI(pdfPath: string): Promise<string> {
-    try {
-      // Read the full PDF file (no processing needed)
-      const pdfBuffer = fs.readFileSync(pdfPath);
-      
-      // Convert to base64 efficiently
-      const base64PDF = pdfBuffer.toString('base64');
-      
-      // Force garbage collection if available
-      if (global.gc) {
-        global.gc();
-      }
-      
-      return base64PDF;
-    } catch (error) {
-      throw new Error(`PDF processing failed: ${error.message}`);
-    }
-  }
+
+
+
+
+
 
   /**
-   * Analyzes the PDF using the current model, with a fallback mechanism.
-   * Accepts a file path, reads from disk, and processes as before.
+   * Analyzes the PDF using Gemini Files API (optimized).
+   * PDF is already processed to 5 pages by controller.
    */
   async analyzeACORD25PDF(pdfPath: string): Promise<PdfAnalysisResult | null> {
-    let base64PDF: string | null = null;
-    try {
-      // Get base64 PDF (truncated to 5 pages)
-      base64PDF = await this.compressPdfForAI(pdfPath);
-      
-      const contents = [
-        {
-          role: 'user',
-          parts: [
-            { inlineData: { mimeType: 'application/pdf', data: base64PDF } },
-            { text: this.buildPrompt() }
-          ]
-        }
-      ];
-      const config = {
-        temperature: 0.0,
-        thinkingConfig: { thinkingBudget: 0 },
-        responseMimeType: 'application/json',
-        maxOutputTokens: 2048
-      };
-      
-      const resp = await this.ai.models.generateContent({
-        model: this.modelName,
-        contents,
-        config
-      } as any);
-      let responseText = resp.text;
-      if (!responseText || responseText.trim() === 'null') {
-        throw new Error('Empty or null response');
-      }
-      return JSON.parse(responseText) as PdfAnalysisResult;
-    } catch (err) {
-      this.switchToFallbackModel();
-      try {
-        const fallback = await this.ai.models.generateContent({
-          model: this.modelName,
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { inlineData: { mimeType: 'application/pdf', data: base64PDF } },
-                { text: this.buildPrompt() }
-              ]
-            }
-          ],
-          config: {
-            temperature: 0.0,
-            thinkingConfig: { thinkingBudget: 0 },
-            responseMimeType: 'application/json',
-            maxOutputTokens: 2048
-          }
-        } as any);
-        let fallbackText = fallback.text;
-        if (!fallbackText || fallbackText.trim() === 'null') return null;
-        return JSON.parse(fallbackText) as PdfAnalysisResult;
-      } catch (fallErr) {
-        return null;
-      }
-    } finally {
-      // Clear base64 string from memory
-      base64PDF = null;
-      if (global.gc) {
-        global.gc();
-      }
-    }
-  }
-
-  private buildPrompt(): string {
-    return `
+    // Use the processed PDF directly (already 5 pages or less)
+    const tempFilePath = pdfPath;
+    
+    const prompt = `
 CRITICAL VALIDATION:
 Your FIRST task is to determine if the provided document is a genuine ACORD 25 Certificate of Liability Insurance (COI) form.
 - You MUST be at least 95% certain it is an ACORD 25 COI.
@@ -243,5 +160,105 @@ Return ONLY the JSON data in this exact format, enclosed in {}:
 ---
 IMPORTANT: If the provided document is NOT an ACORD 25 Certificate of Liability Insurance (COI) form, or if you are not at least 95% certain it is, return only null. Do NOT attempt to extract or hallucinate any data. If in doubt, return null. Do NOT return any other text, explanation, or JSON structure. Just return null.
 `;
+
+    let uploadedFile: any = null;
+    try {
+      // Upload the PROCESSED PDF (5 pages only) to save tokens
+      uploadedFile = await this.ai.files.upload({
+        file: tempFilePath, // Use processed 5-page PDF
+        config: {
+          displayName: `ACORD25_${Date.now()}.pdf`,
+        },
+      });
+
+      // Wait for the file to be processed
+      let getFile = await this.ai.files.get({ name: uploadedFile.name });
+      while (getFile.state === 'PROCESSING') {
+        getFile = await this.ai.files.get({ name: uploadedFile.name });
+        console.log(`File processing status: ${getFile.state}`);
+        
+        // Wait 2 seconds before checking again
+        await new Promise((resolve) => {
+          setTimeout(resolve, 2000);
+        });
+      }
+
+      if (getFile.state === 'FAILED') {
+        throw new Error('File processing failed on Google servers');
+      }
+
+      // Now use the processed file for analysis
+      const response = await this.ai.models.generateContent({
+        model: this.currentModel,
+        contents: createUserContent([
+          prompt,
+          createPartFromUri(uploadedFile.uri, uploadedFile.mimeType),
+        ]),
+        config: {
+          temperature: 0,
+          responseMimeType: 'application/json',
+          thinkingConfig: {
+            thinkingBudget: 0,
+          },
+        },
+      });
+
+      const analysisResult = response.text;
+      const isNullString = typeof analysisResult === 'string' && analysisResult.trim() === 'null';
+      if (!analysisResult || isNullString) {
+        throw new Error('Primary model returned null or empty result');
+      }
+
+      try {
+        return JSON.parse(analysisResult) as PdfAnalysisResult;
+      } catch (parseError) {
+        throw new Error('Primary model returned invalid JSON');
+      }
+    } catch (error) {
+      // Switch to fallback model and retry
+      this.switchToFallbackModel();
+      try {
+        const response = await this.ai.models.generateContent({
+          model: this.currentModel,
+          contents: createUserContent([
+            prompt,
+            createPartFromUri(uploadedFile?.uri, uploadedFile?.mimeType),
+          ]),
+          config: {
+            temperature: 0,
+            responseMimeType: 'application/json',
+            thinkingConfig: {
+              thinkingBudget: 0,
+            },
+          },
+        });
+
+        const analysisResult = response.text;
+        const isNullString = typeof analysisResult === 'string' && analysisResult.trim() === 'null';
+        if (!analysisResult || isNullString) {
+          return null;
+        }
+
+        try {
+          return JSON.parse(analysisResult) as PdfAnalysisResult;
+        } catch (parseError) {
+          return null;
+        }
+      } catch (fallbackError) {
+        return null;
+      }
+    } finally {
+      // Cleanup uploaded file from Google and truncated file
+      setImmediate(async () => {
+        try {
+          if (uploadedFile) {
+            await this.ai.files.delete({ name: uploadedFile.name });
+          }
+          // No cleanup needed - controller handles file management
+        } catch (error) {
+          console.warn('Failed to cleanup files:', error.message);
+        }
+      });
+    }
   }
 }
