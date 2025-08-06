@@ -257,7 +257,7 @@ IMPORTANT: If the provided document is NOT an ACORD 25 Certificate of Liability 
           // No cleanup needed - controller handles file management
         } catch (error) {
           console.warn('Failed to cleanup files:', error.message);
-        }
+      }
       });
     }
   }

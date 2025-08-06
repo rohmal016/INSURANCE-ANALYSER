@@ -59,7 +59,7 @@ export class AppController {
       if (pageCount <= 5) {
         // Use original PDF as-is (5 pages or less)
         return pdfPath;
-      } else {
+        } else {
         // Create 5-page PDF (more than 5 pages)
         const newPdfDoc = await PDFDocument.create();
         
